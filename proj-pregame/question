@@ -1,0 +1,17 @@
+Q: What virtual address did the program try to access from userspace that caused it to crash?
+A: 0xc0000008
+
+Q: What is the virtual address of the instruction that resulted in the crash?
+A: =0x80488ee
+
+Q: What is the name of the function the program was in when it crashed?
+A: _start
+
+Q: Find the C code for the function you identified above:
+A: in Entry.c
+Here is a phrase from stackoverflow:
+The symbol _start is the entry point of your program. That is, the address of that symbol is the address jumped to on program start. Normally, the function with the name _start is supplied by a file called crt0.o which contains the startup code for the C runtime environment. It sets up some stuff, populates the argument array argv, counts how many arguments are there, and then calls main. After main returns, exit is called.
+
+Q: Why did the instruction you identified in #3 try to access memory at the virtual address you identified
+in #1?
+A: load argc to eax
