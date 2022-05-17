@@ -1,17 +1,104 @@
-Q: What virtual address did the program try to access from userspace that caused it to crash?
+Q1: What virtual address did the program try to access from userspace that caused it to crash?
 A: 0xc0000008
 
-Q: What is the virtual address of the instruction that resulted in the crash?
+Q2: What is the virtual address of the instruction that resulted in the crash?
 A: =0x80488ee
 
-Q: What is the name of the function the program was in when it crashed?
+Q3: What is the name of the function the program was in when it crashed?
 A: _start
 
-Q: Find the C code for the function you identified above:
+Q4: Find the C code for the function you identified above:
 A: in Entry.c
 Here is a phrase from stackoverflow:
 The symbol _start is the entry point of your program. That is, the address of that symbol is the address jumped to on program start. Normally, the function with the name _start is supplied by a file called crt0.o which contains the startup code for the C runtime environment. It sets up some stuff, populates the argument array argv, counts how many arguments are there, and then calls main. After main returns, exit is called.
 
-Q: Why did the instruction you identified in #3 try to access memory at the virtual address you identified
+Q5: Why did the instruction you identified in #3 try to access memory at the virtual address you identified
 in #1?
 A: load argc to eax
+
+Q6:Step into the process execute function. What is the name and address of the thread running this
+function? What other threads are present in Pintos at this time? Copy their struct threads. (Hint:
+for the last part dumplist &all list thread allelem may be useful.)
+A: name: main, address: 0xc000e000
+0xc000e000 {tid = 1, status = THREAD_RUNNING, name = "main", '\000' <repeats 11 times>, stack = 0xc000edbc "\001", priority = 31, allelem = {prev = 0xc0039cf8 <all_list>, next = 0xc0104020}, elem = {prev = 0xc0039ce8 <fifo_ready_list>, next = 0xc0039cf0 <fifo_ready_list+8>}, pcb = 0xc010500c, magic = 3446325067}
+0xc0104000 {tid = 2, status = THREAD_BLOCKED, name = "idle", '\000' <repeats 11 times>, stack = 0xc0104f14 "", priority = 0, allelem = {prev = 0xc000e020, next = 0xc0039d00 <all_list+8>}, elem = {prev = 0xc0039ce8 <fifo_ready_list>, next = 0xc0039cf0 <fifo_ready_list+8>}, pcb = 0x0, magic = 3446325067}
+
+Q7: What is the backtrace for the current thread? Copy the backtrace from GDB as your answer and also
+copy down the line of C code corresponding to each function call.
+A: 
+#0  process_execute (file_name=0xc0007d50 "do-nothing") at ../../userprog/process.c:55
+#1  0xc0020a19 in run_task (argv=0xc0039bec <argv+12>) at ../../threads/init.c:317
+#2  0xc0020b8f in run_actions (argv=0xc0039bec <argv+12>) at ../../threads/init.c:390
+#3  0xc00203d9 in main () at ../../threads/init.c:138
+
+Q8: Set a breakpoint at start process and continue to that point. What is the name and address of
+the thread running this function? What other threads are present in Pintos at this time? Copy their
+struct threads.
+A:  0xc010b000 {tid = 3, status = THREAD_RUNNING, name = "do-nothing\000\000\000\000\000", stack = 0xc010bfd4 "", priority = 31, allelem = {prev = 0xc0104020, next = 0xc0039d00 <all_list+8>}, elem = {prev = 0xc0039ce8 <fifo_ready_list>, next = 0xc0039cf0 <fifo_ready_list+8>}, pcb = 0x0, magic = 3446325067}
+
+Q9: Where is the thread running start_process created? Copy down this line of code.
+A:  main thread, process_execute()
+  tid = thread_create(file_name, PRI_DEFAULT, start_process, fn_copy);
+
+Q10: Step through the start_process function until you have stepped over the call to load. Note that load
+sets the eip and esp fields in the if structure. Print out the value of the if structure, displaying
+the values in hex 
+A: eip = 0x80488e8, esp = 0xc0000000
+
+Q11: The first instruction in the asm volatile statement sets the stack pointer to the bottom of the if
+structure. The second one jumps to intr exit. The comments in the code explain what’s happening
+here. Step into the asm volatile statement, and then step through the instructions. As you step
+through the iret instruction, observe that the function “returns” into userspace. Why does the
+processor switch modes when executing this function? Feel free to explain this in terms of the values
+in memory and/or registers at the time iret is executed, and the functionality of the iret instruction.
+A: Because the iret did this.
+What iret did is that restore things from current stack(which is the kernel stack in this case)
+The most difference compared to ret is that it restore EFLAGS, and it changes the SS:ESP and CS:EIP across 
+mode.
+
+Q12: Once you’ve executed iret, type info registers to print out the contents of registers. Include the
+output of this command on Gradescope. How do these values compare to those when you printed out
+if ?
+A: They are same.
+esp            0xc0000000       0xc0000000
+eip            0x80488e8        0x80488e8
+
+
+Q14: Modify the Pintos kernel so that do-nothing no longer crashes. Your change should be in the Pintos
+kernel, not the userspace program (do-nothing.c) or libraries in proj-pregame/src/lib. This should
+not involve extensive changes to the Pintos source code. Our staff solution solves this with a single-line
+change to process.c. Explain the change you made to Pintos and why it was necessary. After making
+this change, the do-nothing test should pass but all others will still fail.
+
+A: Fisrtly, the page fault is caused by the mov instruction. The initiated esp is 0xc0000000, but the mov 
+instruction need to get an address beyond 0xc0000000. So there is a pagefault
+
+  Generally, the _satrt() is defined like `void _start()`, not with `_start(int argc, char* argv[])`
+So in genera cases, we don't take care of where to put the parameters of _start()
+But in this case, we just need to lower esp to avoid to access beyond 0xc0000000.
+In the same time, we need not worry about the accession to the "non-existed" parameters, because there is no 
+accession to them :>
+
+Q15: It is possible that your fix also works for the stack-align-0 test, but there are solutions for do-nothing
+that do not. Take a look at the stack-align-0 test. It behaves similarly to do-nothing, but it
+returns the value of esp % 16. Write down what this program should return (hint: this can be found
+in stack-align-0.ck) as well as why this is the case. You may wish to review stack alignment from
+Discussion 0). Then make sure that your previous fix for do-nothing also passes stack-align-0.
+
+A: just modify the offset of esp.
+
+Q16: Re-run GDB as before. Execute the loadusersymbols command, set a breakpoint at start, and
+continue, to skip directly to the beginning of userspace execution. Using the disassemble and stepi
+commands, execute the do-nothing program instruction by instruction until you reach the int $0x30
+instruction in proj-pregame/src/lib/user/syscall.c. At this point, print the top two words at the
+top of the stack by examining memory (hint: x/2xw $esp) and copy the output.
+A: 0xbfffff98:     0x00000001      0x000000a2
+
+Q17: The int $0x30 instruction switches to kernel mode and pushes an interrupt stack frame onto the
+kernel stack for this process. Continue stepping through instruction-by-instruction until you reach
+syscall_handler. What are the values of args[0] and args[1], and how do they relate to your
+answer to the previous question?
+A: args[0]: 0x00000001, arg[1]: 0x000000a2
+When the int intruction is executed, the SS:ESP firstly be pushed to the kernel stack.
+And the frame passed to syscall_handler points to the lowest variable of this stack. 
+frame->esp is the user's esp.
